@@ -1,0 +1,17 @@
+# secrets
+.env
+
+# private notes - not for anyone else's eyes
+CLAUDE.md
+outreach/
+
+# generated
+results/
+leakage_curves_dark.png
+
+# python
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.venv/
+venv/

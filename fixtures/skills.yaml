@@ -1,0 +1,103 @@
+# Public Common Core skill codes, grades 6-8, split across Math and ELA.
+# These are published standards identifiers, not content from any product.
+# Every question, answer and hint in this harness is generated at runtime.
+
+- code: 6.RP.A.3
+  subject: math
+  grade: 6
+  description: Use ratio and rate reasoning to solve real-world problems, including unit rates.
+
+- code: 6.NS.C.6
+  subject: math
+  grade: 6
+  description: Understand a rational number as a point on the number line, including negatives.
+
+- code: 6.EE.B.7
+  subject: math
+  grade: 6
+  description: Solve real-world problems by writing and solving one-step equations of the form x + p = q and px = q.
+
+- code: 7.RP.A.3
+  subject: math
+  grade: 7
+  description: Use proportional relationships to solve multistep ratio and percent problems.
+
+- code: 7.NS.A.1
+  subject: math
+  grade: 7
+  description: Add and subtract rational numbers, including negatives, and represent them on a number line.
+
+- code: 7.EE.B.4
+  subject: math
+  grade: 7
+  description: Use variables to construct and solve two-step equations and inequalities from word problems.
+
+- code: 7.G.B.4
+  subject: math
+  grade: 7
+  description: Know and use the formulas for the area and circumference of a circle.
+
+- code: 8.EE.A.1
+  subject: math
+  grade: 8
+  description: Know and apply the properties of integer exponents to generate equivalent expressions.
+
+- code: 8.EE.B.5
+  subject: math
+  grade: 8
+  description: Graph proportional relationships and interpret unit rate as the slope of the graph.
+
+- code: 8.EE.C.7
+  subject: math
+  grade: 8
+  description: Solve linear equations in one variable, including those with variables on both sides.
+
+- code: 8.F.A.2
+  subject: math
+  grade: 8
+  description: Compare properties of two functions represented in different ways (table, graph, equation, description).
+
+- code: 8.G.B.7
+  subject: math
+  grade: 8
+  description: Apply the Pythagorean Theorem to find unknown side lengths in right triangles.
+
+- code: RL.6.1
+  subject: ela
+  grade: 6
+  description: Cite textual evidence to support analysis of what a text says explicitly and inferences drawn from it.
+
+- code: RL.6.2
+  subject: ela
+  grade: 6
+  description: Determine a theme or central idea of a text and how it is conveyed through particular details.
+
+- code: RI.7.1
+  subject: ela
+  grade: 7
+  description: Cite several pieces of textual evidence to support analysis of an informational text.
+
+- code: RI.7.5
+  subject: ela
+  grade: 7
+  description: Analyze the structure an author uses to organize a text, including how major sections contribute to the whole.
+
+- code: L.7.4
+  subject: ela
+  grade: 7
+  description: Determine the meaning of unknown words using context clues within a sentence or paragraph.
+
+- code: RL.8.3
+  subject: ela
+  grade: 8
+  description: Analyze how particular lines of dialogue or incidents in a story propel the action or reveal character.
+
+- code: RI.8.6
+  subject: ela
+  grade: 8
+  description: Determine an author's point of view or purpose and analyze how the author responds to conflicting evidence.
+
+- code: L.8.5
+  subject: ela
+  grade: 8
+  description: Interpret figures of speech, including verbal irony and puns, in context.
