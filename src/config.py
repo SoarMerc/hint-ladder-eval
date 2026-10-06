@@ -16,7 +16,9 @@ RESULTS = ROOT / "results"
 CACHE = RESULTS / "cache"
 
 # USD per million tokens: (input, output). Checked against
-# ai.google.dev/gemini-api/docs/pricing in July 2026, and these move.
+# ai.google.dev/gemini-api/docs/pricing in October 2026, and these move.
+# (gemini-3.6-flash is discounted to 0.75/3.75 until the end of 2026; the
+# standing rate is kept here.)
 #
 # Billing is per token, there's no per-request charge. Thinking tokens bill at
 # the output rate, which is most of the bill here since the author model can't

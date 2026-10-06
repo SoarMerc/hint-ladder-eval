@@ -248,4 +248,4 @@ results/          cache and raw results (not uploaded)
 ```
 
 `simulate.py` and `detect.py` together are the argument; the rest is plumbing.
-Prices in `config.py` were checked in July 2026 and will drift.
+Prices in `config.py` were checked in October 2026 and will drift.
