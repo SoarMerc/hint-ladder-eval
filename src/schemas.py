@@ -107,6 +107,7 @@ class CostLine(BaseModel):
 
 class RunReport(BaseModel):
     mock: bool
+    items: list[Item] = Field(default_factory=list)
     curves: list[Curve]
     detections: list[Detection]
     tag_checks: list[TagCheck] = Field(default_factory=list)

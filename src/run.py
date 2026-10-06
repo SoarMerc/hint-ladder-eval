@@ -117,6 +117,7 @@ async def run(
 
     return RunReport(
         mock=cfg.mock,
+        items=items,
         curves=curves,
         detections=detections,
         tag_checks=checks,

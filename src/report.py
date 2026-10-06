@@ -1,7 +1,8 @@
 """Builds the chart and FINDINGS.md.
 
-Meant to be understood in a minute by someone who won't read the code: one
-number, one chart, one table.
+Meant to be understood in a few minutes by someone who won't read the code:
+one number, one chart, one real example, one table. Every term the page uses
+is explained on the page.
 
 A few chart notes, since they're deliberate. One panel per language instead of
 one crowded plot, because 60 lines on a single axis is a hairball. Individual
@@ -16,8 +17,16 @@ from pathlib import Path
 
 from .config import LANGUAGE_NAMES, ROOT, Config
 from .detect import cross_language_gaps, summarise
-from .schemas import Curve, Detection, RunReport
+from .generate import load_skills
+from .schemas import Curve, Detection, Item, RunReport
 from .tag import drift_rate
+
+# Shown on the page in place of the detector's status names.
+VERDICT = {
+    "ok": "held",
+    "no_signal": "no signal",
+    "trivial": "no hints needed",
+}
 
 # First three slots of the validated categorical palette, in fixed order.
 # These three are the documented subset that clears the all-pairs colour-vision
@@ -92,7 +101,7 @@ def draw_chart(
                 linewidth=0.8,
                 alpha=0.45,
                 zorder=1,
-                label="individual skills" if c is subset[0] else None,
+                label="one standard" if c is subset[0] else None,
             )
 
         mean = _mean_curve(subset)
@@ -106,7 +115,7 @@ def draw_chart(
             markeredgecolor=theme["surface"],
             markeredgewidth=1.5,
             zorder=3,
-            label="mean across skills",
+            label="average",
         )
 
         # Selective direct labels: the two ends of the mean, not every point.
@@ -135,7 +144,7 @@ def draw_chart(
             pad=10,
         )
         ax.set_facecolor(theme["surface"])
-        ax.set_xlabel("hints shown", fontsize=9, color=theme["muted"])
+        ax.set_xlabel("hints shown (question hidden)", fontsize=9, color=theme["muted"])
         ax.set_xticks(xs)
         ax.set_ylim(-0.03, 1.06)  # headroom so a mean at 100% is not clipped
         ax.set_yticks([0, 0.25, 0.5, 0.75, 1.0])
@@ -149,7 +158,11 @@ def draw_chart(
         ax.tick_params(colors=theme["muted"], labelsize=9)
 
         if idx == 0:
-            ax.set_ylabel("student accuracy", fontsize=9, color=theme["muted"])
+            ax.set_ylabel(
+                "how often the AI student named the answer",
+                fontsize=9,
+                color=theme["muted"],
+            )
             ax.set_yticklabels([f"{v:.0%}" for v in [0, 0.25, 0.5, 0.75, 1.0]])
             legend = ax.legend(
                 loc="upper left",
@@ -175,6 +188,61 @@ def draw_chart(
     return path
 
 
+def _verdict(d: Detection) -> str:
+    if d.status == "leaked":
+        return f"**leaks at hint {d.leak_level}**"
+    return VERDICT.get(d.status, d.status)
+
+
+def _chart_markdown(chart: Path) -> str:
+    """Light chart, swapped for the dark one when the reader's GitHub is dark."""
+    dark = chart.with_name(chart.stem + "_dark" + chart.suffix)
+    return (
+        "<picture>\n"
+        f'  <source media="(prefers-color-scheme: dark)" srcset="{dark.name}">\n'
+        f'  <img alt="Leakage curves" src="{chart.name}">\n'
+        "</picture>"
+    )
+
+
+def _pick_example(report: RunReport) -> tuple[Item, Detection, Curve] | None:
+    """The English ladder that gave its answer away earliest, if there is one."""
+    leaked = sorted(
+        (
+            d
+            for d in report.detections
+            if d.status == "leaked" and d.language == "en" and d.leak_level
+        ),
+        key=lambda d: d.leak_level,
+    )
+    for d in leaked:
+        item = next(
+            (
+                i
+                for i in report.items
+                if i.skill_code == d.skill_code and i.language == d.language
+            ),
+            None,
+        )
+        curve = next(
+            (
+                c
+                for c in report.curves
+                if c.skill_code == d.skill_code
+                and c.language == d.language
+                and c.condition == d.condition
+            ),
+            None,
+        )
+        if item and curve:
+            return item, d, curve
+    return None
+
+
+def _cell(text: str) -> str:
+    return text.replace("|", "\\|").replace("\n", " ")
+
+
 def write_findings(report: RunReport, cfg: Config, chart: Path) -> Path:
     counts = summarise(report.detections)
     total = len(report.detections)
@@ -197,134 +265,214 @@ def write_findings(report: RunReport, cfg: Config, chart: Path) -> Path:
         )
         add("")
 
-    add("## What this measures")
-    add("")
-    add(
-        "A tutor that teaches through hints is supposed to make the student do "
-        "the thinking. Each hint helps a bit more than the last, and none of "
-        "them gives the answer away. This checks whether that holds."
-    )
-    add("")
-    add(
-        "It writes a question, an answer, and a ladder of "
-        f"{cfg.max_hint_level} hints. Then it shows a model **only the hints, "
-        "never the question**, and asks what the answer to the hidden question "
-        "must be."
-    )
-    add("")
-    add(
-        "- If the ladder is doing its job, the model can't answer. Without the "
-        "question there's nothing to solve, because the hints describe a method "
-        "rather than handing over a result."
-    )
-    add(
-        "- If the ladder leaks, at some hint the model can answer **from the "
-        "hints alone**, and every hint after that was decoration."
-    )
-    add("")
-    add(
-        "Hiding the question is what makes this work. The obvious approach - "
-        "show the student the question and watch its score climb as hints "
-        "arrive - doesn't work any more, because a small current model answers "
-        "grade 6-8 questions with no hints at all. Its score starts at the top "
-        "and never moves. Hiding the question puts the floor back at zero no "
-        "matter how good the model is."
-    )
-    add("")
-    add(
-        "This also catches what a plain text search would miss. On one "
-        "generated item, none of the hints contained the answer anywhere in "
-        "their text, and the model still worked it out from the first three."
-    )
-    add("")
-    add(
-        "The failure is worth catching because it's silent. Nothing errors. The "
-        "student gets it right, the mastery score goes up, and no learning "
-        "happened."
-    )
-    add("")
-
-    add("## Headline")
-    add("")
-    add(f"**{leaked} of {total} ladders gave the answer away earlier than intended.**")
-    add("")
     n_skills = len({d.skill_code for d in report.detections})
-    n_langs = len({d.language for d in report.detections})
-    if n_langs > 1:
+    languages = [
+        lang for lang in cfg.languages if any(d.language == lang for d in report.detections)
+    ]
+    n = cfg.max_hint_level
+
+    add(
+        f"**In one line: {leaked} of {total} hint ladders gave the answer away "
+        "before the last hint.**"
+    )
+    add("")
+    if len(languages) > 1:
         add(
-            f"Those {total} ladders are {n_skills} standards measured in "
-            f"{n_langs} languages, not {total} independent items. The languages "
-            "share a question and an answer by design, so they are correlated: "
-            f"treat the underlying sample size as {n_skills}."
+            f"Those {total} ladders are {n_skills} questions, each in "
+            f"{len(languages)} languages. The translations share a question and "
+            "answer, so they tend to pass or fail together: think of this as "
+            f"{n_skills} findings, not {total}."
         )
         add("")
-    add(f"![Leakage curves]({chart.name})")
+
+    add("## What was tested")
+    add("")
+    add(
+        "A tutor that teaches through hints is meant to make the student do the "
+        "thinking. Each hint helps a little more than the last, and none of "
+        "them hands over the answer. This checks whether that holds."
+    )
+    add("")
+    add(
+        f"For each of {n_skills} school standards, an AI wrote one practice "
+        f"question, its answer, and {n} hints. Then a second AI, playing the "
+        "student, was shown **the hints but never the question**: first no "
+        "hints, then hint 1, then hints 1 and 2, and so on. Each time it was "
+        f"asked what the answer must be, and it had {cfg.repeats} tries at each "
+        "step."
+    )
+    add("")
+    add(
+        "- If the hints are doing their job, it can't answer. It doesn't know "
+        "what the question was, and the hints only describe how to work it out."
+    )
+    add(
+        "- If it *can* answer, the hints gave the answer away on their own. "
+        "Every hint after that point was decoration."
+    )
+    add("")
+    add(
+        "Why hide the question? Because today's AI models answer grade 6-8 "
+        "questions correctly with no hints at all, so showing them the question "
+        "tells you nothing about the hints. With the question hidden, the hints "
+        "are the only thing it has to go on."
+    )
     add("")
 
-    add("## Results by outcome")
+    add("### Words used on this page")
     add("")
-    add("| outcome | count | what it means |")
-    add("|---|---:|---|")
     add(
-        f"| leaked | {counts.get('leaked', 0)} | the score jumped before the "
-        "last hint, so the ladder gave the answer away early |"
+        "- **Standard**: one skill from the Common Core, the public list of what "
+        "US students are expected to learn in each grade. The codes read left "
+        "to right: `6.EE.B.7` is grade 6, Expressions & Equations, group B, "
+        "item 7. Codes starting `RL`, `RI` or `L` are English (reading stories, "
+        "reading non-fiction, language). The table below says what each one "
+        "covers."
     )
     add(
-        f"| ok | {counts.get('ok', 0)} | the score climbed gradually, or only "
-        "jumped at the last hint |"
+        f"- **Hint ladder**: the {n} hints for one question, in order from "
+        f"vaguest to most helpful. Hint {n} is meant to be the most help a "
+        "student gets without being told the answer."
     )
     add(
-        f"| trivial | {counts.get('trivial', 0)} | answered with no hints at "
-        "all, so the question itself is the problem |"
+        "- **Leaks at hint 2**: from hint 2 onwards, the AI student could name "
+        f"the answer without seeing the question. The ladder was meant to hold "
+        f"until hint {n}."
     )
     add(
-        f"| no signal | {counts.get('no_signal', 0)} | the ladder barely moved "
-        "accuracy, so leakage is not measurable on this item |"
+        "- **Held**: the answer never became findable early. Either the AI "
+        "student couldn't name it at all, or only on the last hint."
+    )
+    add(
+        "- **No signal**: the hints barely changed anything, so there's nothing "
+        "to measure on this question."
     )
     add("")
 
-    if gaps:
-        add("## Same ladder, different language")
+    add(_chart_markdown(chart))
+    add("")
+    add(
+        f"Each panel is one language. A grey line is one standard; the coloured "
+        "line is the average. Left edge: no hints shown. Right edge: all "
+        f"{n} hints. A line that sits at the bottom and then shoots to the top "
+        "is a ladder that gave the answer away at that hint."
+    )
+    add("")
+
+    example = _pick_example(report)
+    if example and not report.mock:
+        item, d, curve = example
+        add("## A real example")
+        add("")
+        add(f"Standard `{item.skill_code}`, in English. The question was:")
+        add("")
+        add(f"> {item.question}")
+        add("")
+        add(f"The answer is **{item.answer}**. Here's what the AI student saw, "
+            "without the question, and how often it named that answer:")
+        add("")
+        add("| hints shown | the newest hint | named the answer |")
+        add("|---|---|---:|")
+        add(
+            f"| none | | {round(curve.accuracy[0] * cfg.repeats)} of {cfg.repeats} |"
+        )
+        for k, hint in enumerate(item.hints, start=1):
+            mark = " ← answer findable from here" if k == d.leak_level else ""
+            add(
+                f"| {k} | {_cell(hint)}{mark} | "
+                f"{round(curve.accuracy[k] * cfg.repeats)} of {cfg.repeats} |"
+            )
         add("")
         add(
-            "Same question, same answer, hints translated. These are the "
-            "ladders that hold up in English and lose it in another language."
+            f"Hint {d.leak_level} lays out enough of the working that the answer "
+            "follows without ever seeing the question. A student who reads it "
+            f"has nothing left to figure out, and hints {d.leak_level + 1} "
+            f"{'and' if n - d.leak_level == 2 else 'to'} {n} never get used."
+            if d.leak_level < n - 1
+            else f"Hint {d.leak_level} lays out enough of the working that the "
+            "answer follows without ever seeing the question."
         )
         add("")
-        add("| skill | language | leaks at hint | English leaks at hint | earlier by |")
-        add("|---|---|---:|---:|---:|")
-        for row in gaps:
-            add(
-                f"| {row['skill_code']} | {LANGUAGE_NAMES.get(str(row['language']), row['language'])} "
-                f"| {row['leak_level']} | {row['en_leak_level']} | {row['levels_earlier']} |"
-            )
-        add("")
 
-    flagged = [d for d in report.detections if d.flagged]
-    if flagged:
-        add("## Flagged items")
-        add("")
-        add("| skill | language | outcome | no hints | full ladder | note |")
-        add("|---|---|---|---:|---:|---|")
-        for d in sorted(flagged, key=lambda x: (x.status, x.skill_code)):
-            add(
-                f"| {d.skill_code} | {d.language} | {d.status} | {d.baseline:.0%} "
-                f"| {d.ceiling:.0%} | {d.note} |"
+    add("## Every standard, every language")
+    add("")
+    skills = {s.code: s for s in load_skills(cfg)}
+    by_cell = {(d.skill_code, d.language): d for d in report.detections}
+    codes = [code for code in skills if any(k[0] == code for k in by_cell)]
+    names = [LANGUAGE_NAMES.get(lang, lang) for lang in languages]
+    add("| standard | what the question tests | " + " | ".join(names) + " |")
+    add("|---|---|" + "---|" * len(languages))
+    for code in codes:
+        cells = [
+            _verdict(by_cell[(code, lang)]) if (code, lang) in by_cell else ""
+            for lang in languages
+        ]
+        add(
+            f"| `{code}` (grade {skills[code].grade}) | "
+            f"{_cell(skills[code].description)} | " + " | ".join(cells) + " |"
+        )
+    add("")
+    add(
+        "| result | count |\n|---|---:|\n"
+        + "\n".join(
+            f"| {label} | {counts.get(status, 0)} |"
+            for status, label in (
+                ("leaked", "leaked early"),
+                ("ok", "held"),
+                ("no_signal", "no signal"),
+                ("trivial", "no hints needed"),
             )
+        )
+    )
+    add("")
+
+    if len(languages) > 1:
+        add("## Did translation make it worse?")
         add("")
+        per_lang = ", ".join(
+            f"{sum(d.status == 'leaked' and d.language == lang for d in report.detections)}"
+            f" in {LANGUAGE_NAMES.get(lang, lang)}"
+            for lang in languages
+        )
+        add(
+            "Same question, same answer, only the hints translated. The "
+            "expectation was that hints written carefully in English would "
+            f"get leakier in translation. Leaks out of {n_skills}: {per_lang}."
+        )
+        add("")
+        if gaps:
+            add(
+                "These ladders gave the answer away earlier in translation than "
+                "in English:"
+            )
+            add("")
+            add("| standard | language | leaks at hint | in English, leaks at hint |")
+            add("|---|---|---:|---:|")
+            for row in gaps:
+                add(
+                    f"| `{row['skill_code']}` | "
+                    f"{LANGUAGE_NAMES.get(str(row['language']), row['language'])} "
+                    f"| {row['leak_level']} | {row['en_leak_level']} |"
+                )
+            add("")
+        else:
+            add("No ladder gave the answer away earlier in translation.")
+            add("")
 
     if report.tag_checks:
         rate = drift_rate(report.tag_checks)
-        add("## Standards drift")
+        add("## Is each question testing the skill it's labelled with?")
         add("")
         add(
-            "Each question was shown to a second model that wasn't told which "
-            "standard it was written for, and had to pick one from the list."
+            "A separate check. Each English question was given to another AI "
+            "that wasn't told which standard it was written for, and asked to "
+            "pick the standard from the list. When it picks a different one, the "
+            "question has drifted away from the skill it claims to teach."
         )
         add("")
         add(
-            f"**{rate:.0%} of items were tagged to a different standard than the "
-            f"one they were filed under** ({len(report.tag_checks)} items checked)."
+            f"**It picked a different standard {rate:.0%} of the time** "
+            f"({len(report.tag_checks)} questions checked)."
         )
         add("")
 
@@ -362,20 +510,23 @@ def write_findings(report: RunReport, cfg: Config, chart: Path) -> Path:
         "by this harness. Nothing was taken from any product."
     )
     add(
-        f"- **Small sample.** {cfg.repeats} attempts per point on each curve. "
-        "Enough to see a cliff, not enough to put an error bar on it."
+        f"- **Small sample.** {n_skills} questions, and {cfg.repeats} tries at "
+        "each step. Enough to see a ladder fall off a cliff, not enough for "
+        "precise percentages."
     )
     add(
-        "- **It's evidence, not proof.** A jump at hint *k* strongly suggests "
-        "hint *k* carried the answer. Read the flagged ladders before acting."
+        "- **It's evidence, not proof.** A sudden jump at a hint strongly "
+        "suggests that hint carried the answer. Read the ladder itself before "
+        "acting on it."
     )
     add(
         "- **The student is a model, not a child.** It runs with reasoning "
         "turned off to sit closer to a struggling learner, but it's a stand-in."
     )
     add(
-        "- **The judge never sees the hints**, but it's still a model marking "
-        "free text, and it gets things wrong sometimes."
+        "- **The marking is done by an AI too.** When an answer isn't an exact "
+        "match, another AI decides whether it means the same thing. It never "
+        "sees the hints, but it can still get things wrong."
     )
     add(
         "- **No student data is involved anywhere.** There's no code path that "

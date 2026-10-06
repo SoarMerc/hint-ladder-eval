@@ -7,7 +7,6 @@ outreach/
 
 # generated
 results/
-leakage_curves_dark.png
 
 # python
 __pycache__/
